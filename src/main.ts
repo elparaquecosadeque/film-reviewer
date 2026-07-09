@@ -1,6 +1,7 @@
 import { load } from "jsr:@std/dotenv";
 import { WhisperTranscriber } from "./adapters/whisper.ts";
 import { OllamaReviewer } from "./adapters/ollama.ts";
+import { TmdbCastFetcher } from "./adapters/tmdb.ts";
 import { JsonStorage } from "./adapters/storage.ts";
 import { LetterboxdPublisher } from "./adapters/letterboxd.ts";
 import { ReviewPipeline } from "./pipeline.ts";
@@ -24,6 +25,7 @@ if (!username || !password) {
 const pipeline = new ReviewPipeline(
   new WhisperTranscriber(),
   new OllamaReviewer(),
+  new TmdbCastFetcher(),
   new JsonStorage("./reviews"),
   new LetterboxdPublisher(username, password),
 );

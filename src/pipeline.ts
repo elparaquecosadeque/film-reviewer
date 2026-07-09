@@ -2,6 +2,7 @@ import type { ITranscriber } from "./ports/transcriber.ts";
 import type { IReviewer } from "./ports/reviewer.ts";
 import type { IPublisher } from "./ports/publisher.ts";
 import type { IStorage } from "./ports/storage.ts";
+import type { ICastFetcher } from "./ports/cast-fetcher.ts";
 import type { MovieReview } from "./types.ts";
 
 interface StepTiming {
@@ -30,6 +31,7 @@ export class ReviewPipeline {
   constructor(
     private readonly transcriber: ITranscriber,
     private readonly reviewer: IReviewer,
+    private readonly castFetcher: ICastFetcher,
     private readonly storage: IStorage,
     private readonly publisher: IPublisher,
   ) {}
@@ -42,9 +44,19 @@ export class ReviewPipeline {
       this.transcriber.transcribe(audioPath));
     timings.push(t1);
 
-    const [structured, t2] = await timed("Structuring review with LLM", "🤖", () =>
-      this.reviewer.structure(rawTranscript));
+    const [title, t2] = await timed("Extracting title", "🎞", () =>
+      this.reviewer.extractTitle(rawTranscript));
     timings.push(t2);
+    console.log(`    → "${title}"`);
+
+    const [cast, t3] = await timed("Fetching cast & crew from TMDB", "🎭", () =>
+      this.castFetcher.fetchCast(title));
+    timings.push(t3);
+    if (cast.length > 0) console.log(`    → ${cast.length} names loaded`);
+
+    const [structured, t4] = await timed("Structuring review with LLM", "🤖", () =>
+      this.reviewer.structure(rawTranscript, cast));
+    timings.push(t4);
 
     const review: MovieReview = {
       ...structured,
@@ -52,14 +64,14 @@ export class ReviewPipeline {
       createdAt: new Date().toISOString(),
     };
 
-    const [savedPath, t3] = await timed("Saving review JSON", "💾", () =>
+    const [savedPath, t5] = await timed("Saving review JSON", "💾", () =>
       this.storage.save(review));
-    timings.push(t3);
+    timings.push(t5);
     console.log(`    → ${savedPath}`);
 
-    const [, t4] = await timed("Posting to Letterboxd", "🎬", () =>
+    const [, t6] = await timed("Posting to Letterboxd", "🎬", () =>
       this.publisher.publish(review));
-    timings.push(t4);
+    timings.push(t6);
 
     const totalMs = performance.now() - pipelineStart;
     this.printSummary(timings, totalMs);

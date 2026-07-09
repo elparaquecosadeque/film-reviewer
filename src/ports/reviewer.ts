@@ -1,5 +1,6 @@
 import type { MovieReview } from "../types.ts";
 
 export interface IReviewer {
-  structure(transcript: string): Promise<Omit<MovieReview, "rawTranscript" | "createdAt">>;
+  extractTitle(transcript: string): Promise<string>;
+  structure(transcript: string, cast: string[]): Promise<Omit<MovieReview, "rawTranscript" | "createdAt">>;
 }
