@@ -1,6 +1,5 @@
 import type { ITranscriber } from "./ports/transcriber.ts";
 import type { IReviewer } from "./ports/reviewer.ts";
-import type { IPublisher } from "./ports/publisher.ts";
 import type { IStorage } from "./ports/storage.ts";
 import type { ICastFetcher } from "./ports/cast-fetcher.ts";
 import type { MovieReview } from "./types.ts";
@@ -33,7 +32,6 @@ export class ReviewPipeline {
     private readonly reviewer: IReviewer,
     private readonly castFetcher: ICastFetcher,
     private readonly storage: IStorage,
-    private readonly publisher: IPublisher,
   ) {}
 
   async run(audioPath: string): Promise<MovieReview> {
@@ -68,10 +66,6 @@ export class ReviewPipeline {
       this.storage.save(review));
     timings.push(t5);
     console.log(`    → ${savedPath}`);
-
-    const [, t6] = await timed("Posting to Letterboxd", "🎬", () =>
-      this.publisher.publish(review));
-    timings.push(t6);
 
     const totalMs = performance.now() - pipelineStart;
     this.printSummary(timings, totalMs);
