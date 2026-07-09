@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "tasks": {
     "review": "deno run --allow-all src/main.ts",
+    "compile": "deno compile --allow-all --output review src/main.ts",
     "lint": "deno lint",
     "fmt": "deno fmt",
     "check": "deno check src/main.ts"
