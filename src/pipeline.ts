@@ -18,7 +18,6 @@ function fmt(ms: number): string {
     : `${Math.round(ms)}ms`;
 }
 
-import { Logger } from "./logger.ts";
 
 export class ReviewPipeline {
   private readonly logger: Logger;
