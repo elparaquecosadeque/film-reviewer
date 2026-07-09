@@ -3,6 +3,7 @@ import type { IReviewer } from "./ports/reviewer.ts";
 import type { IStorage } from "./ports/storage.ts";
 import type { ICastFetcher } from "./ports/cast-fetcher.ts";
 import type { MovieReview } from "./types.ts";
+import { Logger } from "./logger.ts";
 
 interface StepTiming {
   step: string;
@@ -17,42 +18,49 @@ function fmt(ms: number): string {
     : `${Math.round(ms)}ms`;
 }
 
-async function timed<T>(label: string, emoji: string, fn: () => Promise<T>): Promise<[T, StepTiming]> {
-  console.log(`${emoji}  ${label}...`);
-  const start = performance.now();
-  const result = await fn();
-  const durationMs = performance.now() - start;
-  console.log(`    ✓ done in ${fmt(durationMs)}`);
-  return [result, { step: label, durationMs }];
-}
+import { Logger } from "./logger.ts";
 
 export class ReviewPipeline {
+  private readonly logger: Logger;
+
   constructor(
     private readonly transcriber: ITranscriber,
     private readonly reviewer: IReviewer,
     private readonly castFetcher: ICastFetcher,
     private readonly storage: IStorage,
-  ) {}
+    logger?: Logger,
+  ) {
+    this.logger = logger ?? new Logger();
+  }
 
   async run(audioPath: string): Promise<MovieReview> {
     const pipelineStart = performance.now();
     const timings: StepTiming[] = [];
 
-    const [rawTranscript, t1] = await timed("Transcribing audio", "🎙", () =>
+    const t = async <T>(label: string, emoji: string, fn: () => Promise<T>): Promise<[T, StepTiming]> => {
+      this.logger.log(`${emoji}  ${label}...`);
+      const start = performance.now();
+      const result = await fn();
+      const durationMs = performance.now() - start;
+      this.logger.log(`    ✓ done in ${fmt(durationMs)}`);
+      return [result, { step: label, durationMs }];
+    };
+
+    const [rawTranscript, t1] = await t("Transcribing audio", "🎙", () =>
       this.transcriber.transcribe(audioPath));
     timings.push(t1);
 
-    const [title, t2] = await timed("Extracting title", "🎞", () =>
+    const [title, t2] = await t("Extracting title", "🎞", () =>
       this.reviewer.extractTitle(rawTranscript));
     timings.push(t2);
-    console.log(`    → "${title}"`);
+    this.logger.log(`    → "${title}"`);
 
-    const [cast, t3] = await timed("Fetching cast & crew from TMDB", "🎭", () =>
+    const [cast, t3] = await t("Fetching cast & crew from TMDB", "🎭", () =>
       this.castFetcher.fetchCast(title));
     timings.push(t3);
-    if (cast.length > 0) console.log(`    → ${cast.length} names loaded`);
+    if (cast.length > 0) this.logger.log(`    → ${cast.length} names loaded`);
 
-    const [structured, t4] = await timed("Structuring review with LLM", "🤖", () =>
+    const [structured, t4] = await t("Structuring review with LLM", "🤖", () =>
       this.reviewer.structure(rawTranscript, cast));
     timings.push(t4);
 
@@ -62,25 +70,33 @@ export class ReviewPipeline {
       createdAt: new Date().toISOString(),
     };
 
-    const [savedPath, t5] = await timed("Saving review JSON", "💾", () =>
+    const [savedPath, t5] = await t("Saving review JSON", "💾", () =>
       this.storage.save(review));
     timings.push(t5);
-    console.log(`    → ${savedPath}`);
+    this.logger.log(`    → ${savedPath}`);
 
     const totalMs = performance.now() - pipelineStart;
     this.printSummary(timings, totalMs);
+
+    // Save log file next to the JSON (same base name, .log extension)
+    const logPath = savedPath.replace(/\.json$/, ".log");
+    await this.logger.save(logPath);
+    console.log(`📋  Log saved → ${logPath}`);
 
     return review;
   }
 
   private printSummary(timings: StepTiming[], totalMs: number): void {
-    console.log("\n┌─ Pipeline timing ─────────────────────┐");
-    for (const { step, durationMs } of timings) {
-      const pct = ((durationMs / totalMs) * 100).toFixed(0).padStart(3);
-      console.log(`│  ${step.padEnd(30)} ${fmt(durationMs).padStart(6)}  ${pct}%`);
-    }
-    console.log(`├───────────────────────────────────────┤`);
-    console.log(`│  ${"Total".padEnd(30)} ${fmt(totalMs).padStart(6)}  100%`);
-    console.log("└───────────────────────────────────────┘");
+    const lines = [
+      "\n┌─ Pipeline timing ─────────────────────┐",
+      ...timings.map(({ step, durationMs }) => {
+        const pct = ((durationMs / totalMs) * 100).toFixed(0).padStart(3);
+        return `│  ${step.padEnd(30)} ${fmt(durationMs).padStart(6)}  ${pct}%`;
+      }),
+      `├───────────────────────────────────────┤`,
+      `│  ${"Total".padEnd(30)} ${fmt(totalMs).padStart(6)}  100%`,
+      "└───────────────────────────────────────┘",
+    ];
+    lines.forEach((l) => this.logger.log(l));
   }
 }
