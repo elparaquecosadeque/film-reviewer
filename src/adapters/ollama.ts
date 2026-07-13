@@ -18,14 +18,16 @@ Extract and return ONLY valid JSON with this exact shape:
   "title": "<movie title>",
   "liked": <true|false>,
   "stars": <integer 1-5>,
-  "review": "<summary of the review in the speaker's own voice, max 500 words>"
+  "review": "<summary of the review in the speaker's own voice, max 300 words>"
 }
 
 Rules:
 - "liked" is true if the speaker expresses overall positive sentiment.
 - "stars" must be the number the speaker mentions, or infer from sentiment if not stated.
-- "review" must preserve the speaker's tone and key points, condensed to ≤500 words.
+- "review" must preserve the speaker's tone and key points, condensed to ≤300 words.
 - Preserve Spanish phrasing and style — do not translate.
+- Bad words are allowed if the speaker uses them, but do not add any new bad words.
+- Speaker mentions of cast or crew should be corrected to proper spelling if misheard, but do not add new names.
 - Return ONLY the JSON object. No markdown, no explanation.
 
 Transcript:
@@ -34,7 +36,7 @@ ${transcript}
 
 export class OllamaReviewer implements IReviewer {
   // ponytail: defaults to llama3.2 — swap via OLLAMA_MODEL in .env if needed
-  constructor(private readonly model: string = Deno.env.get("OLLAMA_MODEL") || "llama3.2") {}
+  constructor(private readonly model: string = Deno.env.get("OLLAMA_MODEL") || "llama3.2") { }
 
   async extractTitle(transcript: string): Promise<string> {
     const response = await Ollama.chat({

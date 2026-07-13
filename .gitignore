@@ -1,2 +1,5 @@
 reviews/
 .env
+*.ogg
+*.m4a
+*.exe
